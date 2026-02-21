@@ -46,6 +46,25 @@ interface BusOptions {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const createStopwatch = () => {
+  const startedAt = Date.now();
+  let stoppedAt: number | null = null;
+
+  const elapsedMs = () => {
+    const end = stoppedAt ?? Date.now();
+    return end - startedAt;
+  };
+
+  return {
+    elapsedMs,
+    stop: () => {
+      if (stoppedAt === null) {
+        stoppedAt = Date.now();
+      }
+    }
+  };
+};
+
 export class InMemoryBus {
   private readonly queues = new Map<string, QueueMessageEnvelope[]>();
   private readonly deadLetterQueues = new Map<string, DeadLetterRecord[]>();
@@ -117,7 +136,7 @@ export class InMemoryBus {
     }
 
     const maxWaitTimeInMs = options?.maxWaitTimeInMs ?? 0;
-    const deadline = Date.now() + maxWaitTimeInMs;
+    const stopwatch = createStopwatch();
 
     while (true) {
       this.releaseExpiredLocks(queueName);
@@ -126,6 +145,11 @@ export class InMemoryBus {
       const available = queue.filter((envelope) => envelope.state === "available").slice(0, max);
       if (available.length > 0) {
         const now = Date.now();
+        const waitedMs = stopwatch.elapsedMs();
+
+        console.log(
+          `[Bus] receiveMessages returning ${available.length} message(s) after waiting ${waitedMs}ms (maxWait=${maxWaitTimeInMs}ms)`
+        );
 
         const wrapped = available.map((envelope) => {
           envelope.state = "locked";
@@ -145,7 +169,11 @@ export class InMemoryBus {
         return wrapped;
       }
 
-      if (Date.now() >= deadline) {
+      if (stopwatch.elapsedMs() >= maxWaitTimeInMs) {
+        stopwatch.stop();
+        console.log(
+          `[Bus] receiveMessages hit deadline after ${stopwatch.elapsedMs()}ms (maxWait=${maxWaitTimeInMs}ms) and returned 0 message(s)`
+        );
         return [];
       }
 

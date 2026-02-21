@@ -12,6 +12,8 @@ Implemented concepts:
 - Message settlement: `complete()`, `abandon()`, `deadLetter(reason)`
 - Dead-letter queue (DLQ) per queue
 - Optional duplicate simulation
+- Receive deadline timing with a tiny stopwatch
+- Simple diagnostics: seen count, last message, eventual seen checks
 
 ## Message shape
 
@@ -41,6 +43,21 @@ In [src/demo.ts](../src/demo.ts):
 7. Receives the invalid message, validates schema, and calls `deadLetter(...)`.
 8. Reads and prints DLQ entries.
 9. Enables duplicate simulation, sends `msg-4`, completes it once (duplicate is re-enqueued), receives duplicate, disables duplicate simulation, and completes duplicate.
+10. Performs a final receive on an empty queue with a static deadline of 2 seconds to show timeout behavior.
+
+## Diagnostics
+
+The demo now tracks and prints:
+
+- `seenCount`: total deliveries seen by the receiver (includes retries/duplicates)
+- `lastMessage`: most recently seen `messageId`
+- `eventualSeen(messageId, minCount?)`: final boolean assertion that a message was observed enough times
+
+Example checks in output:
+
+- `eventualSeen(msg-2, 2)=true` (abandon + redelivery)
+- `eventualSeen(msg-3)=true` (seen before dead-letter)
+- `eventualSeen(msg-4, 2)=true` (original + duplicate)
 
 ## Expected console behavior
 
@@ -52,12 +69,17 @@ You should see logs for:
 - Dead-letter action with reason
 - DLQ count and item details
 - Duplicate simulation toggling and duplicate delivery
+- Receive timing logs (`receiveMessages returning ... after waiting ...`)
+- Deadline hit log from stopwatch (`hit deadline after ... and returned 0 message(s)`)
+- Diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`)
 
 ## How to run
 
 From project root, run:
 
 `npm run demo`
+
+The demo uses a static receive deadline of `2000ms` for each receive call.
 
 ## Notes
 
