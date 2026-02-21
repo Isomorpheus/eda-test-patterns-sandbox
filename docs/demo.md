@@ -2,6 +2,10 @@
 
 This document explains the sandbox demo in [src/demo.ts](../src/demo.ts) and the simulator in [src/inMemoryBus.ts](../src/inMemoryBus.ts).
 
+Related docs:
+
+- InMemoryBus internals: [docs/inMemoryBus.md](./inMemoryBus.md)
+
 ## Purpose
 
 Use a local in-memory bus to practice event-driven patterns without Azure Service Bus.
@@ -37,13 +41,14 @@ In [src/demo.ts](../src/demo.ts):
    - `msg-2` with valid `schemaVersion=1.0`
    - `msg-3` with invalid `schemaVersion=0.9`
 3. Creates a receiver in `peekLock` mode.
-4. Receives 1 message and calls `complete()`.
-5. Receives next message and calls `abandon()`.
-6. Receives again to verify abandoned message is visible again, then calls `complete()`.
-7. Receives the invalid message, validates schema, and calls `deadLetter(...)`.
-8. Reads and prints DLQ entries.
-9. Enables duplicate simulation, sends `msg-4`, completes it once (duplicate is re-enqueued), receives duplicate, disables duplicate simulation, and completes duplicate.
-10. Performs a final receive on an empty queue with a static deadline of 2 seconds to show timeout behavior.
+4. Log 1: receives 1 message and calls `complete()`.
+5. Log 2: receives next message and calls `abandon()`.
+6. Log 3: receives again to verify abandoned message is visible again, then calls `complete()`.
+7. Log 4: receives the invalid message, validates schema, and calls `deadLetter(...)`.
+8. Log 5: inspects and prints DLQ entries.
+9. Log 6: enables duplicate simulation, sends `msg-4`, completes it once (duplicate is re-enqueued), receives duplicate, disables duplicate simulation, and completes duplicate.
+10. Log 7: performs a final receive on an empty queue and polls in a loop until the static 2-second deadline.
+11. Log 8: prints diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`).
 
 ## Diagnostics
 
@@ -63,6 +68,7 @@ Example checks in output:
 
 You should see logs for:
 
+- Demo/diagnostic prefixes (`[Demo] ...`, `[Diag] ...`)
 - Send operations
 - Lock acquisition and lock expiry timestamps
 - Completion and abandonment transitions
@@ -71,6 +77,7 @@ You should see logs for:
 - Duplicate simulation toggling and duplicate delivery
 - Receive timing logs (`receiveMessages returning ... after waiting ...`)
 - Deadline hit log from stopwatch (`hit deadline after ... and returned 0 message(s)`)
+- Poll deadline assertion line (`Poll-until-deadline check: PASS ...`)
 - Diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`)
 
 ## How to run

@@ -21,3 +21,8 @@ npm run demo
 ```bash
 npm run build
 ```
+
+## Docs
+
+- Demo walkthrough: [docs/demo.md](docs/demo.md)
+- In-memory bus internals: [docs/inMemoryBus.md](docs/inMemoryBus.md)

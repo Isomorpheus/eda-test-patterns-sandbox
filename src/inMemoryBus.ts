@@ -137,8 +137,9 @@ export class InMemoryBus {
 
     const maxWaitTimeInMs = options?.maxWaitTimeInMs ?? 0;
     const stopwatch = createStopwatch();
+    const pollIntervalMs = 25;
 
-    while (true) {
+    while (stopwatch.elapsedMs() < maxWaitTimeInMs) {
       this.releaseExpiredLocks(queueName);
       const queue = this.getOrCreateQueue(queueName);
 
@@ -169,16 +170,17 @@ export class InMemoryBus {
         return wrapped;
       }
 
-      if (stopwatch.elapsedMs() >= maxWaitTimeInMs) {
-        stopwatch.stop();
-        console.log(
-          `[Bus] receiveMessages hit deadline after ${stopwatch.elapsedMs()}ms (maxWait=${maxWaitTimeInMs}ms) and returned 0 message(s)`
-        );
-        return [];
+      const remainingMs = maxWaitTimeInMs - stopwatch.elapsedMs();
+      if (remainingMs > 0) {
+        await sleep(Math.min(pollIntervalMs, remainingMs));
       }
-
-      await sleep(25);
     }
+
+    stopwatch.stop();
+    console.log(
+      `[Bus] receiveMessages hit deadline after ${stopwatch.elapsedMs()}ms (maxWait=${maxWaitTimeInMs}ms) and returned 0 message(s)`
+    );
+    return [];
   }
 
   private wrapReceivedMessage(
