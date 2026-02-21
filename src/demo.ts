@@ -2,6 +2,7 @@ import { BusMessage, InMemoryBus } from "./inMemoryBus";
 
 const EXPECTED_SCHEMA_VERSION = "1.0";
 const RECEIVE_DEADLINE_MS = 2_000;
+const ACTIVE_RUN_ID = "weekend-run-001";
 
 type DemoDiagnostics = {
   seenCount: number;
@@ -13,7 +14,7 @@ function buildMessage(
   messageId: string,
   schemaVersion: string,
   body: Record<string, unknown>,
-  runId = "weekend-run-001"
+  runId = ACTIVE_RUN_ID
 ): BusMessage {
   return {
     messageId,
@@ -28,6 +29,10 @@ function buildMessage(
 }
 
 async function runDemo(): Promise<void> {
+  const separator = (): void => {
+    console.log("[Demo] ------------------------------------------------------------");
+  };
+
   const log = (scope: "Demo" | "Diag", message: string): void => {
     console.log(`[${scope}] ${message}`);
   };
@@ -54,6 +59,10 @@ async function runDemo(): Promise<void> {
     return (diagnostics.countsByMessageId.get(messageId) ?? 0) >= minCount;
   };
 
+  const isCurrentRun = (message: { applicationProperties: { runId: string } }): boolean => {
+    return message.applicationProperties.runId === ACTIVE_RUN_ID;
+  };
+
   const bus = new InMemoryBus({ lockDurationInMs: 15_000 });
   const queueName = "orders";
 
@@ -63,6 +72,7 @@ async function runDemo(): Promise<void> {
 
   const receiver = bus.createReceiver(queueName, { receiveMode: "peekLock" });
 
+  separator();
   log("Demo", "Log 1: receive 1 and complete");
   const firstBatch = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
   if (firstBatch.length === 1) {
@@ -72,6 +82,7 @@ async function runDemo(): Promise<void> {
     await msg.complete();
   }
 
+  separator();
   log("Demo", "Log 2: receive next and abandon (should reappear)");
   const secondBatch = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
   if (secondBatch.length === 1) {
@@ -81,6 +92,7 @@ async function runDemo(): Promise<void> {
     await msg.abandon();
   }
 
+  separator();
   log("Demo", "Log 3: verify abandoned message reappears, then complete it");
   const reappearedBatch = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
   if (reappearedBatch.length === 1) {
@@ -90,6 +102,7 @@ async function runDemo(): Promise<void> {
     await msg.complete();
   }
 
+  separator();
   log("Demo", "Log 4: receive invalid schemaVersion and dead-letter");
   const thirdBatch = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
   if (thirdBatch.length === 1) {
@@ -106,6 +119,7 @@ async function runDemo(): Promise<void> {
   }
 
   const dlq = bus.getDeadLetterQueue(queueName);
+  separator();
   log("Demo", `Log 5: inspect DLQ (count for '${queueName}': ${dlq.length})`);
   for (const item of dlq) {
     log(
@@ -114,6 +128,7 @@ async function runDemo(): Promise<void> {
     );
   }
 
+  separator();
   log("Demo", "Log 6: duplicate simulation (optional behavior)");
   bus.setDuplicateSimulation(true);
   bus.send(queueName, buildMessage("msg-4", "1.0", { orderId: 1004 }));
@@ -133,6 +148,7 @@ async function runDemo(): Promise<void> {
     await duplicateDelivery[0].complete();
   }
 
+  separator();
   log("Demo", "Log 7: poll in a loop until 2s deadline (empty queue)");
   log("Demo", "Expect bus to poll repeatedly and then return 0 messages at deadline.");
   const startedAt = Date.now();
@@ -145,12 +161,40 @@ async function runDemo(): Promise<void> {
     `Poll-until-deadline check: ${nearDeadline ? "PASS" : "CHECK"} (target=${RECEIVE_DEADLINE_MS}ms, actual~${elapsed}ms)`
   );
 
+  separator();
   log("Diag", "Log 8: diagnostics summary");
   log("Diag", `seenCount=${diagnostics.seenCount}`);
   log("Diag", `lastMessage=${diagnostics.lastMessage ?? "<none>"}`);
   log("Diag", `eventualSeen(msg-2, 2)=${eventualSeen("msg-2", 2)}`);
   log("Diag", `eventualSeen(msg-3)=${eventualSeen("msg-3")}`);
   log("Diag", `eventualSeen(msg-4, 2)=${eventualSeen("msg-4", 2)}`);
+
+  separator();
+  log("Demo", "Log 9: run isolation first-gating demo");
+  const runIsolationQueue = "orders-run-isolation";
+  bus.send(runIsolationQueue, buildMessage("msg-ri-foreign", "1.0", { orderId: 2001 }, "weekend-run-999"));
+  bus.send(runIsolationQueue, buildMessage("msg-ri-local", "1.0", { orderId: 2002 }, ACTIVE_RUN_ID));
+
+  const runIsolationReceiver = bus.createReceiver(runIsolationQueue, { receiveMode: "peekLock" });
+
+  const gateBatch = await runIsolationReceiver.receiveMessages(2, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
+  for (const msg of gateBatch) {
+    const runId = msg.applicationProperties.runId;
+    if (isCurrentRun(msg)) {
+      log("Demo", `First gate PASS for ${msg.messageId} (runId=${runId}); continue pipeline.`);
+      await msg.complete();
+    } else {
+      log("Demo", `First gate BLOCKED ${msg.messageId} (runId=${runId}); not handled.`);
+      await msg.abandon();
+    }
+  }
+
+  const stillBlocked = await runIsolationReceiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
+  if (stillBlocked.length === 1) {
+    const msg = stillBlocked[0];
+    log("Demo", `Still blocked on next receive: ${msg.messageId} (runId=${msg.applicationProperties.runId}).`);
+    await msg.abandon();
+  }
 
   console.log("=== Demo complete ===\n");
 }

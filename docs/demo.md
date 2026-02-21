@@ -16,6 +16,7 @@ Implemented concepts:
 - Message settlement: `complete()`, `abandon()`, `deadLetter(reason)`
 - Dead-letter queue (DLQ) per queue
 - Optional duplicate simulation
+- Run isolation first-gating (`applicationProperties.runId`)
 - Receive deadline timing with a tiny stopwatch
 - Simple diagnostics: seen count, last message, eventual seen checks
 
@@ -49,6 +50,10 @@ In [src/demo.ts](../src/demo.ts):
 9. Log 6: enables duplicate simulation, sends `msg-4`, completes it once (duplicate is re-enqueued), receives duplicate, disables duplicate simulation, and completes duplicate.
 10. Log 7: performs a final receive on an empty queue and polls in a loop until the static 2-second deadline.
 11. Log 8: prints diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`).
+12. Log 9: runs a dedicated run-isolation demo where the first gate checks `applicationProperties.runId`:
+    - blocks a foreign-run message (`runId != active run`) and does not handle it (`abandon()`)
+    - passes a local-run message (`runId == active run`) and handles it (`complete()`)
+    - shows the foreign-run message is still blocked on the next receive
 
 ## Diagnostics
 
@@ -69,12 +74,14 @@ Example checks in output:
 You should see logs for:
 
 - Demo/diagnostic prefixes (`[Demo] ...`, `[Diag] ...`)
+- Visual separators between log sections (`[Demo] ------------------------------------------------------------`)
 - Send operations
 - Lock acquisition and lock expiry timestamps
 - Completion and abandonment transitions
 - Dead-letter action with reason
 - DLQ count and item details
 - Duplicate simulation toggling and duplicate delivery
+- Run-isolation gate logs (`First gate BLOCKED/PASS ...`, blocked messages are not handled)
 - Receive timing logs (`receiveMessages returning ... after waiting ...`)
 - Deadline hit log from stopwatch (`hit deadline after ... and returned 0 message(s)`)
 - Poll deadline assertion line (`Poll-until-deadline check: PASS ...`)
