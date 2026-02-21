@@ -50,10 +50,16 @@ In [src/demo.ts](../src/demo.ts):
 9. Log 6: enables duplicate simulation, sends `msg-4`, completes it once (duplicate is re-enqueued), receives duplicate, disables duplicate simulation, and completes duplicate.
 10. Log 7: performs a final receive on an empty queue and polls in a loop until the static 2-second deadline.
 11. Log 8: prints diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`).
-12. Log 9: runs a dedicated run-isolation demo where the first gate checks `applicationProperties.runId`:
-    - blocks a foreign-run message (`runId != active run`) and does not handle it (`abandon()`)
-    - passes a local-run message (`runId == active run`) and handles it (`complete()`)
-    - shows the foreign-run message is still blocked on the next receive
+12. Log 9: runs a dedicated run-isolation demo with a predicate resolver:
+  - `predicate(message)` is `message.applicationProperties.runId === activeRunId`
+  - non-matching messages are blocked and not handled (`abandon()`)
+  - the first matching message resolves the operation and is settled in one central success path (`complete()`)
+  - the resolved message is returned from the predicate resolver
+  - the foreign-run message is shown as still blocked on the next receive
+13. Log 10: demonstrates timeout behavior for the predicate resolver:
+  - no matching message is available for the active run
+  - resolver throws timeout error with context
+  - demo catches and logs the context
 
 ## Diagnostics
 
@@ -82,6 +88,8 @@ You should see logs for:
 - DLQ count and item details
 - Duplicate simulation toggling and duplicate delivery
 - Run-isolation gate logs (`First gate BLOCKED/PASS ...`, blocked messages are not handled)
+- Predicate resolver behavior (`if predicate(message) true -> resolve + settle (complete)`)
+- Timeout with context (`Timeout while resolving predicate ... context={...}`)
 - Receive timing logs (`receiveMessages returning ... after waiting ...`)
 - Deadline hit log from stopwatch (`hit deadline after ... and returned 0 message(s)`)
 - Poll deadline assertion line (`Poll-until-deadline check: PASS ...`)
