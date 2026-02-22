@@ -2,6 +2,17 @@ import { BusMessage, InMemoryBus, ReceivedBusMessage } from "./inMemoryBus";
 
 const LOCK_DURATION_MS = 1_000;
 
+let runId = "";
+let correlationId = "";
+
+const stats = {
+  deliveriesSeen: 0,
+  firstDeliveries: 0,
+  duplicatesDetected: 0,
+  completed: 0,
+  lockLostRedeliveries: 0
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const ansi = {
@@ -98,32 +109,39 @@ type ScenarioStats = {
 async function handleDelivery(
   message: ReceivedBusMessage,
   seenMessageIds: Set<string>,
-  stats: ScenarioStats,
+  scenarioStats: ScenarioStats,
   scenarioLabel: string
 ): Promise<"first" | "duplicate"> {
-  stats.deliveriesSeen += 1;
+  scenarioStats.deliveriesSeen += 1;
+  demoStats.deliveriesSeen += 1;
 
   if (seenMessageIds.has(message.messageId)) {
-    stats.duplicatesIgnored += 1;
+    scenarioStats.duplicatesIgnored += 1;
+    demoStats.duplicatesDetected += 1;
     console.log(
-      `${paint(`[${scenarioLabel}]`, scenarioColor(scenarioLabel), ansi.bold)} delivery=${stats.deliveriesSeen} messageId=${paint(message.messageId, ansi.yellow)} ${paint("duplicate detected", ansi.yellow, ansi.bold)} -> settlement=${paint("complete", ansi.green)}`
+      `${paint(`[${scenarioLabel}]`, scenarioColor(scenarioLabel), ansi.bold)} delivery=${scenarioStats.deliveriesSeen} messageId=${paint(message.messageId, ansi.yellow)} ${paint("duplicate detected", ansi.yellow, ansi.bold)} -> settlement=${paint("complete", ansi.green)}`
     );
     await message.complete();
+    demoStats.completed += 1;
     return "duplicate";
   }
 
   seenMessageIds.add(message.messageId);
+  demoStats.firstDeliveries += 1;
   console.log(
-    `${paint(`[${scenarioLabel}]`, scenarioColor(scenarioLabel), ansi.bold)} delivery=${stats.deliveriesSeen} messageId=${paint(message.messageId, ansi.cyan)} ${paint("first-seen", ansi.cyan, ansi.bold)} -> settlement=${paint("complete", ansi.green)}`
+    `${paint(`[${scenarioLabel}]`, scenarioColor(scenarioLabel), ansi.bold)} delivery=${scenarioStats.deliveriesSeen} messageId=${paint(message.messageId, ansi.cyan)} ${paint("first-seen", ansi.cyan, ansi.bold)} -> settlement=${paint("complete", ansi.green)}`
   );
   await message.complete();
+  demoStats.completed += 1;
   return "first";
 }
 
+const demoStats = stats;
+
 async function runScenarioA(bus: InMemoryBus): Promise<void> {
   const queueName = "orders-dup-happy";
-  const runId = newId("run-a");
-  const correlationId = newId("corr-a");
+  runId = newId("run-a");
+  correlationId = newId("corr-a");
   const seenMessageIds = new Set<string>();
   const stats: ScenarioStats = { deliveriesSeen: 0, duplicatesIgnored: 0 };
 
@@ -160,8 +178,8 @@ async function runScenarioA(bus: InMemoryBus): Promise<void> {
 
 async function runScenarioB(bus: InMemoryBus): Promise<void> {
   const queueName = "orders-dup-lock-expiry";
-  const runId = newId("run-b");
-  const correlationId = newId("corr-b");
+  runId = newId("run-b");
+  correlationId = newId("corr-b");
   const seenMessageIds = new Set<string>();
   const stats: ScenarioStats = { deliveriesSeen: 0, duplicatesIgnored: 0 };
 
@@ -182,6 +200,8 @@ async function runScenarioB(bus: InMemoryBus): Promise<void> {
   );
 
   stats.deliveriesSeen += 1;
+  demoStats.deliveriesSeen += 1;
+  demoStats.firstDeliveries += 1;
   seenMessageIds.add(first.messageId);
   console.log(
     `${paint("[B]", ansi.bold, ansi.magenta)} delivery=${stats.deliveriesSeen} messageId=${paint(first.messageId, ansi.cyan)} ${paint("first-seen", ansi.cyan, ansi.bold)} -> settlement=${paint("none", ansi.yellow)} ${paint("(simulate handler crash/timeout)", ansi.dim)}`
@@ -201,18 +221,23 @@ async function runScenarioB(bus: InMemoryBus): Promise<void> {
   );
 
   stats.deliveriesSeen += 1;
+  demoStats.deliveriesSeen += 1;
   if (seenMessageIds.has(redelivery.messageId)) {
     stats.duplicatesIgnored += 1;
+    demoStats.duplicatesDetected += 1;
+    demoStats.lockLostRedeliveries += 1;
     console.log(
       `${paint("[B]", ansi.bold, ansi.magenta)} delivery=${stats.deliveriesSeen} messageId=${paint(redelivery.messageId, ansi.yellow)} ${paint("duplicate detected", ansi.yellow, ansi.bold)} after lock-lost redelivery -> settlement=${paint("complete", ansi.green)}`
     );
   } else {
     seenMessageIds.add(redelivery.messageId);
+    demoStats.firstDeliveries += 1;
     console.log(
       `${paint("[B]", ansi.bold, ansi.magenta)} delivery=${stats.deliveriesSeen} messageId=${paint(redelivery.messageId, ansi.cyan)} ${paint("first-seen", ansi.cyan, ansi.bold)} ${paint("(unexpected for this scenario)", ansi.red)} -> settlement=${paint("complete", ansi.green)}`
     );
   }
   await redelivery.complete();
+  demoStats.completed += 1;
 
   console.log(
     `${paint("[B] summary", ansi.bold, ansi.blue)} deliveries seen=${paint(String(stats.deliveriesSeen), ansi.blue)}, duplicates ignored=${paint(String(stats.duplicatesIgnored), ansi.yellow)}`
@@ -227,6 +252,14 @@ async function run(): Promise<void> {
 
   await runScenarioA(bus);
   await runScenarioB(bus);
+
+  console.log("---- DEMO 4 SUMMARY ----");
+  console.log(demoStats);
+  console.log(`runId: ${runId}`);
+  console.log(`correlationId: ${correlationId}`);
+  console.log(
+    `SUMMARY: deliveries=${demoStats.deliveriesSeen} first=${demoStats.firstDeliveries} duplicates=${demoStats.duplicatesDetected} lockLost=${demoStats.lockLostRedeliveries} completed=${demoStats.completed}`
+  );
 
   console.log(`\n${paint("=== Demo 4 complete ===", ansi.bold, ansi.green)}`);
 }
