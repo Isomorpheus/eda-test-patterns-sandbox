@@ -4,6 +4,10 @@ import { waitForMessage } from "./waitForMessage";
 
 const QUEUE_NAME = "orders-parallel-runs";
 const MESSAGES_PER_RUN = 5;
+const SIMULATE_CROSSTALK = process.argv.includes("--crosstalk");
+
+// Run normal: node ...demo-5...
+// Run with cross-talk: node ...demo-5... --crosstalk
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -108,6 +112,15 @@ async function runDemo(): Promise<void> {
   console.log(paint("----------------------------------------", ansi.gray));
   console.log(paint("Starting parallel run isolation demo", ansi.bold, ansi.blue));
   console.log(paint("----------------------------------------", ansi.gray));
+  if (SIMULATE_CROSSTALK) {
+    console.log(paint("========================================", ansi.bold, ansi.yellow));
+    console.log(paint("⚠ CROSS-TALK SIMULATION MODE ENABLED", ansi.bold, ansi.yellow));
+    console.log(paint("========================================", ansi.bold, ansi.yellow));
+    console.log("Expected outcome: failure via cross-talk detection");
+    console.log(paint("========================================", ansi.bold, ansi.yellow));
+  } else {
+    console.log(paint("Mode: normal (no cross-talk simulation)", ansi.bold, ansi.green));
+  }
 
   const workerA = (async () => {
     for (let i = 0; i < MESSAGES_PER_RUN; i += 1) {
@@ -163,8 +176,8 @@ async function runDemo(): Promise<void> {
       const msg = await waitForMessage(
         workerReceiverB,
         QUEUE_NAME,
-        (m) => m.applicationProperties.runId === runB.runId,
-        { timeoutMs: 10_000, pollIntervalMs: 50, runId: runB.runId }
+        (m) => (SIMULATE_CROSSTALK ? true : m.applicationProperties.runId === runB.runId),
+        { timeoutMs: 10_000, pollIntervalMs: 50, runId: SIMULATE_CROSSTALK ? undefined : runB.runId }
       );
 
       if (msg.applicationProperties.runId !== runB.runId) {
@@ -325,17 +338,48 @@ async function runDemo(): Promise<void> {
   for (const [corr, stats] of runC.perCorr) {
     console.log(`${corr}: deliveries=${stats.deliveries} first=${stats.first} dupes=${stats.dupes}`);
   }
-  console.log(paint("========================================", ansi.bold, ansi.green));
-  console.log(paint("✅ PARALLEL RUN ISOLATION VERIFIED", ansi.bold, ansi.green));
-  console.log(paint("========================================", ansi.bold, ansi.green));
-  console.log("No cross-talk detected.");
-  console.log("runId isolation preserved.");
-  console.log("correlationId visibility confirmed.");
-  console.log(paint("========================================", ansi.bold, ansi.green));
-  console.log("");
 }
 
-runDemo().catch((error) => {
+async function main(): Promise<void> {
+  try {
+    await runDemo();
+
+    if (SIMULATE_CROSSTALK) {
+      console.error(paint("ERROR: cross-talk simulation did NOT trigger detection", ansi.bold, ansi.red));
+      process.exitCode = 1;
+      return;
+    }
+
+    console.log(paint("========================================", ansi.bold, ansi.green));
+    console.log(paint("✅ PARALLEL RUN ISOLATION VERIFIED", ansi.bold, ansi.green));
+    console.log(paint("========================================", ansi.bold, ansi.green));
+    console.log("No cross-talk detected.");
+    console.log("runId isolation preserved.");
+    console.log("correlationId visibility confirmed.");
+    console.log(paint("========================================", ansi.bold, ansi.green));
+    console.log("");
+  } catch (error) {
+    if (SIMULATE_CROSSTALK) {
+      console.log(paint("EXPECTED FAILURE: cross-talk successfully detected", ansi.bold, ansi.yellow));
+      return;
+    }
+
+    console.error(paint("UNEXPECTED FAILURE", ansi.bold, ansi.red));
+    throw error;
+  }
+}
+
+if (SIMULATE_CROSSTALK) {
+  const handleExpectedFailure = () => {
+    console.log(paint("EXPECTED FAILURE: cross-talk successfully detected", ansi.bold, ansi.yellow));
+    process.exit(0);
+  };
+
+  process.on("unhandledRejection", handleExpectedFailure);
+  process.on("uncaughtException", handleExpectedFailure);
+}
+
+main().catch((error) => {
   console.error(`${paint("[Demo-05] Failed:", ansi.bold, ansi.red)}`, error);
   process.exitCode = 1;
 });

@@ -71,9 +71,12 @@ If lock time is past `lockedUntilEpochMs`, message is moved back to `available` 
 
 ## Duplicate simulation
 
-`setDuplicateSimulation(true|false)` toggles duplicate behavior.
+Two duplicate simulation paths are supported:
 
-When enabled, `complete()` re-enqueues a copy of the completed message into the same queue.
+1. Global toggle via `setDuplicateSimulation(true|false)`
+  - when enabled, `complete()` re-enqueues a copy of the completed message into the same queue
+2. Per-send duplicate via `send(queueName, message, { simulateDuplicate: true })`
+  - enqueues the same message twice at send time
 
 ## Notes and limits
 
