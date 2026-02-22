@@ -5,7 +5,9 @@ import { waitForMessage } from "./waitForMessage";
 const QUEUE_NAME = "orders-mini-flow-ordering";
 const RUN_LABEL = "RUN A";
 const RUN_ID = randomUUID();
-const NEGATIVE_MODE = process.argv.includes("--negative");
+const NEGATIVE = process.argv.includes("--negative");
+const MISSING = process.argv.includes("--missing");
+const TOTAL_TIMEOUT_MS = 15_000;
 
 const CORRELATIONS = ["A-1", "A-2", "A-3"] as const;
 const EXPECTED_ORDER = ["FlowStarted", "FlowProcessed", "FlowCompleted"] as const;
@@ -103,8 +105,10 @@ function assertOrder(eventsByCorr: Map<string, CorrState>): void {
 async function runDemo(): Promise<void> {
   console.log(`\n${paint("=== Block 6: mini flow ordering per correlationId ===", ansi.bold, ansi.magenta)}`);
   console.log(`${paint("RUN A", ansi.bold, ansi.cyan)} | runId=${RUN_ID}`);
-  if (NEGATIVE_MODE) {
+  if (NEGATIVE) {
     console.log(paint("Mode: --negative (expect ordering failure)", ansi.bold, ansi.yellow));
+  } else if (MISSING) {
+    console.log(paint("Mode: --missing (expect timeout / missing event failure)", ansi.bold, ansi.yellow));
   } else {
     console.log(paint("Mode: normal", ansi.bold, ansi.green));
   }
@@ -122,8 +126,10 @@ async function runDemo(): Promise<void> {
   const sendTasks = CORRELATIONS.map((corr) =>
     (async () => {
       const subjectOrder: readonly FlowSubject[] =
-        NEGATIVE_MODE && corr === "A-2"
+        NEGATIVE && corr === "A-2"
           ? (["FlowProcessed", "FlowStarted", "FlowCompleted"] as const)
+          : MISSING && corr === "A-3"
+            ? (["FlowStarted", "FlowProcessed"] as const)
           : EXPECTED_ORDER;
 
       for (let i = 0; i < subjectOrder.length; i += 1) {
@@ -140,18 +146,57 @@ async function runDemo(): Promise<void> {
     })()
   );
 
+  const collectionStartedAt = Date.now();
   while (!allCorrelationsComplete(eventsByCorr)) {
-    const msg = await waitForMessage(
-      receiver,
-      QUEUE_NAME,
-      (m) => {
-        const subjectOk = EXPECTED_ORDER.includes(m.subject as FlowSubject);
-        const corr = String((m.applicationProperties as { correlationId?: string }).correlationId ?? m.correlationId);
-        const corrOk = CORRELATIONS.includes(corr as (typeof CORRELATIONS)[number]);
-        return subjectOk && corrOk;
-      },
-      { timeoutMs: 15_000, pollIntervalMs: 50, runId: RUN_ID }
-    );
+    const elapsedMs = Date.now() - collectionStartedAt;
+    const remainingMs = TOTAL_TIMEOUT_MS - elapsedMs;
+
+    if (remainingMs <= 0) {
+      const expectedJoined = EXPECTED_ORDER.join(" -> ");
+      let incompleteCorr = "<unknown>";
+      for (const corr of CORRELATIONS) {
+        const seen = eventsByCorr.get(corr)?.subjectsSeen.length ?? 0;
+        if (seen < EXPECTED_ORDER.length) {
+          incompleteCorr = corr;
+          break;
+        }
+      }
+
+      console.error(paint("========================================", ansi.bold, ansi.red));
+      console.error(paint("🚨 DEMO 6 MISSING EVENT TIMEOUT 🚨", ansi.bold, ansi.red));
+      console.error(paint("========================================", ansi.bold, ansi.red));
+      console.error(`${paint("runId", ansi.bold)}=${RUN_ID}`);
+      console.error(`${paint("incompleteCorrelationId", ansi.bold)}=${paint(incompleteCorr, ansi.cyan)}`);
+      console.error(`${paint("expected", ansi.bold)}=${paint(expectedJoined, ansi.green)}`);
+      console.error(`${paint("waitedMs", ansi.bold)}=${elapsedMs}`);
+      for (const corr of CORRELATIONS) {
+        const actual = eventsByCorr.get(corr)?.subjectsSeen.join(" -> ") || "<none>";
+        console.error(`${paint(`actual ${corr}`, ansi.bold)}=${paint(actual, ansi.yellow)}`);
+      }
+      console.error(paint("========================================", ansi.bold, ansi.red));
+      throw new Error(`Missing event timeout for correlationId=${incompleteCorr}`);
+    }
+
+    let msg;
+    try {
+      msg = await waitForMessage(
+        receiver,
+        QUEUE_NAME,
+        (m) => {
+          const subjectOk = EXPECTED_ORDER.includes(m.subject as FlowSubject);
+          const corr = String((m.applicationProperties as { correlationId?: string }).correlationId ?? m.correlationId);
+          const corrOk = CORRELATIONS.includes(corr as (typeof CORRELATIONS)[number]);
+          return subjectOk && corrOk;
+        },
+        { timeoutMs: Math.min(1_000, Math.max(1, remainingMs)), pollIntervalMs: 50, runId: RUN_ID }
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("[waitForMessage] timeout")) {
+        continue;
+      }
+      throw error;
+    }
 
     const corr = String((msg.applicationProperties as { correlationId?: string }).correlationId ?? msg.correlationId);
     const subject = msg.subject;
@@ -202,16 +247,33 @@ async function runDemo(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (NEGATIVE && MISSING) {
+    console.error(paint("ERROR: use either --negative or --missing, not both", ansi.bold, ansi.red));
+    process.exitCode = 1;
+    return;
+  }
+
   try {
     await runDemo();
 
-    if (NEGATIVE_MODE) {
+    if (NEGATIVE) {
       console.error(paint("ERROR: negative mode did NOT trigger ordering violation", ansi.bold, ansi.red));
+      process.exitCode = 1;
+      return;
+    }
+
+    if (MISSING) {
+      console.error(paint("ERROR: --missing did NOT trigger a failure", ansi.bold, ansi.red));
       process.exitCode = 1;
     }
   } catch (error) {
-    if (NEGATIVE_MODE) {
+    if (NEGATIVE) {
       console.log(paint("EXPECTED FAILURE: ordering violation detected", ansi.bold, ansi.yellow));
+      return;
+    }
+
+    if (MISSING) {
+      console.log(paint("EXPECTED FAILURE: missing event detected (timeout)", ansi.bold, ansi.yellow));
       return;
     }
 

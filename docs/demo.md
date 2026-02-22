@@ -126,10 +126,11 @@ In [src/demo-6-mini-flow-ordering.ts](../src/demo-6-mini-flow-ordering.ts):
 - final summary prints each correlation order and PASS line:
   - `PASS: ordering verified per correlationId`
 
-Block 6 now has two explicit modes:
+Block 6 now has three explicit modes:
 
 - normal mode (default): ordering must pass for all correlations
 - negative mode (`--negative`): one correlation (`A-2`) is intentionally sent out of order to trigger validation failure
+- missing mode (`--missing`): one correlation (`A-3`) intentionally does not send `FlowCompleted` to trigger timeout/missing-event validation failure
 
 Top-level outcome handling:
 
@@ -139,6 +140,9 @@ Top-level outcome handling:
 - `--negative` mode:
   - ordering violation => `EXPECTED FAILURE: ordering violation detected` and clean exit
   - no violation => `ERROR: negative mode did NOT trigger ordering violation` and non-zero exit
+- `--missing` mode:
+  - timeout/missing-event failure => `EXPECTED FAILURE: missing event detected (timeout)` and clean exit
+  - no failure => `ERROR: --missing did NOT trigger a failure` and non-zero exit
 
 ## Diagnostics
 
@@ -240,8 +244,10 @@ You should see logs for:
 - Demo 6 receive log format (`RUN A | runId=... | corr=... | msg=... | subject=... | FIRST/DUPLICATE | complete`)
 - Demo 6 summary block (`---- DEMO 6 SUMMARY ----`)
 - Demo 6 PASS line (`PASS: ordering verified per correlationId`)
-- Demo 6 mode line (`Mode: normal` or `Mode: --negative (expect ordering failure)`)
+- Demo 6 mode line (`Mode: normal`, `Mode: --negative (expect ordering failure)`, or `Mode: --missing (expect timeout / missing event failure)`)
 - Demo 6 expected-failure line in negative mode (`EXPECTED FAILURE: ordering violation detected`)
+- Demo 6 missing-timeout banner (`🚨 DEMO 6 MISSING EVENT TIMEOUT 🚨`)
+- Demo 6 expected-failure line in missing mode (`EXPECTED FAILURE: missing event detected (timeout)`)
 
 ## How to run
 
@@ -275,9 +281,9 @@ For Demo 6 negative ordering scenario, run:
 
 `npm run demo-6 -- --negative`
 
-or
+For Demo 6 missing-event scenario, run:
 
-`npm run demo-6-negative`
+`npm run demo-6 -- --missing`
 
 The demo uses a static receive deadline of `2000ms` for each receive call.
 
