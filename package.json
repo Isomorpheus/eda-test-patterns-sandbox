@@ -8,6 +8,7 @@
     "demo-3": "tsx src/demo-3-settlement-peeklock-dlq.ts",
     "demo": "tsx src/demo.ts",
     "demo-4": "tsx src/demo-4-duplicates-idempotency.ts",
+    "demo-5": "tsx src/demo-5-parallel-runs-isolation.ts",
     "build": "tsc -p tsconfig.json",
     "test": "echo \"No tests configured\""
   },

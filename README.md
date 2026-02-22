@@ -18,6 +18,7 @@ npm run demo-2
 npm run demo-3
 npm run demo
 npm run demo-4
+npm run demo-5
 ```
 
 3. Optional: compile TypeScript

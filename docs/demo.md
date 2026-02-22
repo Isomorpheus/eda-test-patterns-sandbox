@@ -2,7 +2,7 @@
 
 This document explains the sandbox demo in [src/demo.ts](../src/demo.ts) and the simulator in [src/inMemoryBus.ts](../src/inMemoryBus.ts).
 
-It also documents the duplicate/idempotency demo in [src/demo-4-duplicates-idempotency.ts](../src/demo-4-duplicates-idempotency.ts).
+It also documents the duplicate/idempotency demo in [src/demo-4-duplicates-idempotency.ts](../src/demo-4-duplicates-idempotency.ts) and the parallel-runs isolation demo in [src/demo-5-parallel-runs-isolation.ts](../src/demo-5-parallel-runs-isolation.ts).
 
 Related docs:
 
@@ -69,6 +69,25 @@ In [src/demo.ts](../src/demo.ts):
 - run-isolation first-gating flow
 - predicate resolver success path
 - predicate resolver timeout path with context
+
+### Block 5
+
+In [src/demo-5-parallel-runs-isolation.ts](../src/demo-5-parallel-runs-isolation.ts):
+
+- three parallel runs (`RUN A`, `RUN B`, `RUN C`) share the same queue
+- each run uses its own `runId`, `correlationId`, `seenMessageIds`, and per-run stats
+- processed-message logs always include `runId`, `correlationId`, `messageId`, `FIRST/DUPLICATE`, and settlement (`complete`)
+- each run tracks minimal per-correlation distribution (`deliveries`, `first`, `dupes`)
+- interleaved sends (random delays) simulate concurrent test traffic
+- each worker uses `waitForMessage(...)` with run-id isolation
+- fail-fast cross-talk detection with visual banner (`🚨 CROSS-TALK DETECTED 🚨`) + throw
+- startup section header before workers begin
+- per-run summary section headers (`RunA summary`, `RunB summary`, `RunC summary`)
+- final PASS banner:
+  - `✅ PARALLEL RUN ISOLATION VERIFIED`
+  - `No cross-talk detected.`
+  - `runId isolation preserved.`
+  - `correlationId visibility confirmed.`
 
 ## Diagnostics
 
@@ -159,6 +178,12 @@ You should see logs for:
 - Poll deadline assertion line (`Poll-until-deadline check: PASS ...`)
 - Diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`)
 - Demo 4 summary block (`---- DEMO 4 SUMMARY ----` and `SUMMARY: deliveries=...`)
+- Demo 5 startup header (`Starting parallel run isolation demo`)
+- Demo 5 processed-message line format (`RUN X | runId=... | corr=... | msg=... | FIRST/DUPLICATE | complete`)
+- Demo 5 per-correlation summary lines (`corr-...: deliveries=... first=... dupes=...`)
+- Demo 5 per-run summary headers (`RunA summary`, `RunB summary`, `RunC summary`)
+- Demo 5 cross-talk error banner (`🚨 CROSS-TALK DETECTED 🚨`)
+- Demo 5 final PASS banner (`✅ PARALLEL RUN ISOLATION VERIFIED`)
 
 ## How to run
 
@@ -175,6 +200,10 @@ From project root, run:
 For Demo 4 only, run:
 
 `npm run demo-4`
+
+For Demo 5 only, run:
+
+`npm run demo-5`
 
 The demo uses a static receive deadline of `2000ms` for each receive call.
 
