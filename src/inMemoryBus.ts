@@ -17,6 +17,10 @@ export interface ReceiverOptions {
   receiveMode: "peekLock";
 }
 
+export interface SendOptions {
+  simulateDuplicate?: boolean;
+}
+
 export interface ReceivedBusMessage extends BusMessage {
   deliveryCount: number;
   lockedUntilUtc: Date;
@@ -82,7 +86,7 @@ export class InMemoryBus {
     console.log(`[Bus] Duplicate simulation set to ${enabled}`);
   }
 
-  public send(queueName: string, message: BusMessage): void {
+  public send(queueName: string, message: BusMessage, options?: SendOptions): void {
     const queue = this.getOrCreateQueue(queueName);
     queue.push({
       message: this.cloneMessage(message),
@@ -95,6 +99,18 @@ export class InMemoryBus {
     console.log(
       `[Bus] Sent message ${message.messageId} to queue '${queueName}' (schema=${message.applicationProperties.schemaVersion})`
     );
+
+    if (options?.simulateDuplicate) {
+      queue.push({
+        message: this.cloneMessage(message),
+        state: "available",
+        deliveryCount: 0,
+        lockedUntilEpochMs: null,
+        lockOwnerId: null
+      });
+
+      console.log(`[Bus] Simulated duplicate enqueued for message ${message.messageId} on queue '${queueName}'`);
+    }
   }
 
   public createReceiver(queueName: string, options: ReceiverOptions): {

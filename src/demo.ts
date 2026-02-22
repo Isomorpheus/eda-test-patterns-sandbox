@@ -19,6 +19,21 @@ type DemoReceiver = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const ansi = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  cyan: "\x1b[36m",
+  gray: "\x1b[90m"
+};
+
+const paint = (text: string, ...codes: string[]): string => `${codes.join("")}${text}${ansi.reset}`;
+
 function buildMessage(
   messageId: string,
   schemaVersion: string,
@@ -39,14 +54,33 @@ function buildMessage(
 
 async function runDemo(): Promise<void> {
   const separator = (): void => {
-    console.log("[Demo] ------------------------------------------------------------");
+    console.log(
+      `${paint("[Demo]", ansi.bold, ansi.cyan)} ${paint("------------------------------------------------------------", ansi.dim)}`
+    );
+  };
+
+  const colorizeMessage = (message: string): string => {
+    return message
+      .replaceAll("complete", paint("complete", ansi.green))
+      .replaceAll("completing", paint("completing", ansi.green))
+      .replaceAll("abandon", paint("abandon", ansi.yellow))
+      .replaceAll("abandoning", paint("abandoning", ansi.yellow))
+      .replaceAll("dead-letter", paint("dead-letter", ansi.red))
+      .replaceAll("timeout", paint("timeout", ansi.magenta))
+      .replaceAll("PASS", paint("PASS", ansi.green, ansi.bold))
+      .replaceAll("CHECK", paint("CHECK", ansi.yellow, ansi.bold))
+      .replaceAll("BLOCKED", paint("BLOCKED", ansi.yellow, ansi.bold));
   };
 
   const log = (scope: "Demo" | "Diag", message: string): void => {
-    console.log(`[${scope}] ${message}`);
+    const prefix =
+      scope === "Demo"
+        ? paint("[Demo]", ansi.bold, ansi.cyan)
+        : paint("[Diag]", ansi.bold, ansi.blue);
+    console.log(`${prefix} ${colorizeMessage(message)}`);
   };
 
-  console.log("\n=== InMemoryBus demo (peekLock + settlement + DLQ + duplicates) ===");
+  console.log(`\n${paint("=== InMemoryBus demo (peekLock + settlement + DLQ) ===", ansi.bold, ansi.cyan)}`);
 
   const diagnostics: DemoDiagnostics = {
     seenCount: 0,
@@ -211,27 +245,7 @@ async function runDemo(): Promise<void> {
   }
 
   separator();
-  log("Demo", "Log 6: duplicate simulation (optional behavior)");
-  bus.setDuplicateSimulation(true);
-  bus.send(queueName, buildMessage("msg-4", "1.0", { orderId: 1004 }));
-
-  const duplicateSource = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
-  if (duplicateSource.length === 1) {
-    trackSeen(duplicateSource[0].messageId);
-    log("Demo", `Completing ${duplicateSource[0].messageId}; duplicate should be re-enqueued.`);
-    await duplicateSource[0].complete();
-  }
-
-  const duplicateDelivery = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
-  if (duplicateDelivery.length === 1) {
-    trackSeen(duplicateDelivery[0].messageId);
-    log("Demo", `Duplicate observed: ${duplicateDelivery[0].messageId}. Completing duplicate.`);
-    bus.setDuplicateSimulation(false);
-    await duplicateDelivery[0].complete();
-  }
-
-  separator();
-  log("Demo", "Log 7: poll in a loop until 2s deadline (empty queue)");
+  log("Demo", "Log 6: poll in a loop until 2s deadline (empty queue)");
   log("Demo", "Expect bus to poll repeatedly and then return 0 messages at deadline.");
   const startedAt = Date.now();
   const timeoutBatch = await receiver.receiveMessages(1, { maxWaitTimeInMs: RECEIVE_DEADLINE_MS });
@@ -244,15 +258,14 @@ async function runDemo(): Promise<void> {
   );
 
   separator();
-  log("Diag", "Log 8: diagnostics summary");
+  log("Diag", "Log 7: diagnostics summary");
   log("Diag", `seenCount=${diagnostics.seenCount}`);
   log("Diag", `lastMessage=${diagnostics.lastMessage ?? "<none>"}`);
   log("Diag", `eventualSeen(msg-2, 2)=${eventualSeen("msg-2", 2)}`);
   log("Diag", `eventualSeen(msg-3)=${eventualSeen("msg-3")}`);
-  log("Diag", `eventualSeen(msg-4, 2)=${eventualSeen("msg-4", 2)}`);
 
   separator();
-  log("Demo", "Log 9: run isolation first-gating demo");
+  log("Demo", "Log 8: run isolation first-gating demo");
   const runIsolationQueue = "orders-run-isolation";
   bus.send(runIsolationQueue, buildMessage("msg-ri-foreign", "1.0", { orderId: 2001 }, "weekend-run-999"));
   bus.send(runIsolationQueue, buildMessage("msg-ri-local", "1.0", { orderId: 2002 }, ACTIVE_RUN_ID));
@@ -279,7 +292,7 @@ async function runDemo(): Promise<void> {
   }
 
   separator();
-  log("Demo", "Log 10: timeout -> throw with context (predicate resolver)");
+  log("Demo", "Log 9: timeout -> throw with context (predicate resolver)");
   const timeoutQueue = "orders-run-isolation-timeout";
   bus.send(timeoutQueue, buildMessage("msg-timeout-foreign", "1.0", { orderId: 3001 }, "weekend-run-404"));
   const timeoutReceiver = bus.createReceiver(timeoutQueue, { receiveMode: "peekLock" });
@@ -295,10 +308,10 @@ async function runDemo(): Promise<void> {
     log("Demo", `Expected timeout caught -> ${message}`);
   }
 
-  console.log("=== Demo complete ===\n");
+  console.log(`${paint("=== Demo complete ===", ansi.bold, ansi.green)}\n`);
 }
 
 runDemo().catch((error) => {
-  console.error("[Demo] Failed:", error);
+  console.error(`${paint("[Demo] Failed:", ansi.bold, ansi.red)}`, error);
   process.exitCode = 1;
 });

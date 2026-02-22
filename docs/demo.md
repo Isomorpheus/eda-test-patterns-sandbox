@@ -2,6 +2,8 @@
 
 This document explains the sandbox demo in [src/demo.ts](../src/demo.ts) and the simulator in [src/inMemoryBus.ts](../src/inMemoryBus.ts).
 
+It also documents the duplicate/idempotency demo in [src/demo-4-duplicates-idempotency.ts](../src/demo-4-duplicates-idempotency.ts).
+
 Related docs:
 
 - InMemoryBus internals: [docs/inMemoryBus.md](./inMemoryBus.md)
@@ -75,6 +77,61 @@ Example checks in output:
 - `eventualSeen(msg-3)=true` (seen before dead-letter)
 - `eventualSeen(msg-4, 2)=true` (original + duplicate)
 
+## Demo 4: duplicates + idempotency-light
+
+Sunday Block 4 is implemented in [src/demo-4-duplicates-idempotency.ts](../src/demo-4-duplicates-idempotency.ts).
+
+Goal:
+
+- Show duplicate delivery behavior.
+- Show lightweight consumer-side idempotency with `seenMessageIds`.
+
+### Duplicate simulation mechanism
+
+The bus supports duplicate enqueue via `send(queueName, message, { simulateDuplicate: true })` in [src/inMemoryBus.ts](../src/inMemoryBus.ts).
+
+When `simulateDuplicate` is true, the same message is enqueued twice (same `messageId`).
+
+### Scenario A: Duplicate happy path
+
+1. Create fresh `runId` and `correlationId`.
+2. Send one message with `simulateDuplicate: true`.
+3. Receive first delivery, treat as first-seen, `complete()`.
+4. Receive second delivery (same `messageId`), detect duplicate via `seenMessageIds`, `complete()` and ignore business processing.
+5. Print summary:
+  - deliveries seen
+  - duplicates ignored
+
+### Scenario B: Duplicate via lock expiry (lock lost)
+
+1. Create fresh `runId` and `correlationId`.
+2. Send one normal message.
+3. Receive once, but intentionally do not settle.
+4. Wait past lock duration.
+5. Receive same message again (redelivery), detect duplicate by `messageId`.
+6. `complete()` the redelivery.
+7. Print summary:
+  - deliveries seen
+  - duplicates ignored
+
+### Why this maps to Azure Service Bus
+
+- Scenario A models explicit duplicate delivery from producer/system behavior.
+- Scenario B models redelivery after lock loss when a handler fails or times out before settlement.
+- Together they demonstrate at-least-once delivery semantics and why idempotent consumers are needed.
+
+### Logging in demo 4
+
+Demo 4 logs include:
+
+- `runId` and `correlationId` per scenario
+- `messageId` on each delivery
+- first-seen vs duplicate
+- settlement action (`complete` or intentionally none)
+- final per-scenario summary
+
+The script also uses ANSI colors for readability in terminal output.
+
 ## Expected console behavior
 
 You should see logs for:
@@ -100,6 +157,10 @@ You should see logs for:
 From project root, run:
 
 `npm run demo`
+
+For Demo 4 only, run:
+
+`npm run demo-4`
 
 The demo uses a static receive deadline of `2000ms` for each receive call.
 

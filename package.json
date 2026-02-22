@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "demo": "tsx src/demo.ts",
+    "demo-4": "tsx src/demo-4-duplicates-idempotency.ts",
     "build": "tsc -p tsconfig.json",
     "test": "echo \"No tests configured\""
   },
