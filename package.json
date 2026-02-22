@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "demo-1": "tsx src/demo-1-basic-send-receive.ts",
+    "demo-2": "tsx src/demo-2-correlation-eventually.ts",
+    "demo-3": "tsx src/demo-3-settlement-peeklock-dlq.ts",
     "demo": "tsx src/demo.ts",
     "demo-4": "tsx src/demo-4-duplicates-idempotency.ts",
     "build": "tsc -p tsconfig.json",

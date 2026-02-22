@@ -10,10 +10,14 @@ Exploration of event-driven architecture testing patterns.
 npm install
 ```
 
-2. Run the in-memory Service Bus demo
+2. Run the in-memory Service Bus demos
 
 ```bash
+npm run demo-1
+npm run demo-2
+npm run demo-3
 npm run demo
+npm run demo-4
 ```
 
 3. Optional: compile TypeScript

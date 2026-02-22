@@ -34,48 +34,49 @@ The demo uses this message structure:
   - `runId`
   - `schemaVersion`
 
-## What the demo does
+## What the demos do
+
+The sandbox is now split into focused runnable files:
+
+### Block 1
+
+In [src/demo-1-basic-send-receive.ts](../src/demo-1-basic-send-receive.ts):
+
+- basic send + receive in `peekLock`
+- single `complete()` flow
+
+### Block 2
+
+In [src/demo-2-correlation-eventually.ts](../src/demo-2-correlation-eventually.ts):
+
+- correlation-based matching
+- eventual receive via `waitForMessage(...)`
+- run-id filtering behavior
+
+### Block 3
+
+In [src/demo-3-settlement-peeklock-dlq.ts](../src/demo-3-settlement-peeklock-dlq.ts):
+
+- `complete()` scenario
+- `abandon()` scenario + redelivery
+- `deadLetter(...)` scenario
+- lock-expiry redelivery scenario
+
+### Block 4+
 
 In [src/demo.ts](../src/demo.ts):
 
-1. Creates `InMemoryBus` with lock duration of 15 seconds.
-2. Sends 3 messages to queue `orders`:
-   - `msg-1` with valid `schemaVersion=1.0`
-   - `msg-2` with valid `schemaVersion=1.0`
-   - `msg-3` with invalid `schemaVersion=0.9`
-3. Creates a receiver in `peekLock` mode.
-4. Log 1: receives 1 message and calls `complete()`.
-5. Log 2: receives next message and calls `abandon()`.
-6. Log 3: receives again to verify abandoned message is visible again, then calls `complete()`.
-7. Log 4: receives the invalid message, validates schema, and calls `deadLetter(...)`.
-8. Log 5: inspects and prints DLQ entries.
-9. Log 6: enables duplicate simulation, sends `msg-4`, completes it once (duplicate is re-enqueued), receives duplicate, disables duplicate simulation, and completes duplicate.
-10. Log 7: performs a final receive on an empty queue and polls in a loop until the static 2-second deadline.
-11. Log 8: prints diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`).
-12. Log 9: runs a dedicated run-isolation demo with a predicate resolver:
-  - `predicate(message)` is `message.applicationProperties.runId === activeRunId`
-  - non-matching messages are blocked and not handled (`abandon()`)
-  - the first matching message resolves the operation and is settled in one central success path (`complete()`)
-  - the resolved message is returned from the predicate resolver
-  - the foreign-run message is shown as still blocked on the next receive
-13. Log 10: demonstrates timeout behavior for the predicate resolver:
-  - no matching message is available for the active run
-  - resolver throws timeout error with context
-  - demo catches and logs the context
+- run-isolation first-gating flow
+- predicate resolver success path
+- predicate resolver timeout path with context
 
 ## Diagnostics
 
-The demo now tracks and prints:
+Diagnostics in [src/demo.ts](../src/demo.ts) include:
 
-- `seenCount`: total deliveries seen by the receiver (includes retries/duplicates)
-- `lastMessage`: most recently seen `messageId`
-- `eventualSeen(messageId, minCount?)`: final boolean assertion that a message was observed enough times
-
-Example checks in output:
-
-- `eventualSeen(msg-2, 2)=true` (abandon + redelivery)
-- `eventualSeen(msg-3)=true` (seen before dead-letter)
-- `eventualSeen(msg-4, 2)=true` (original + duplicate)
+- `seenCount`
+- `lastMessage`
+- `eventualSeen(...)`
 
 ## Demo 4: duplicates + idempotency-light
 
@@ -129,6 +130,13 @@ Demo 4 logs include:
 - first-seen vs duplicate
 - settlement action (`complete` or intentionally none)
 - final per-scenario summary
+- final global stats object + single-line summary:
+  - `deliveriesSeen`
+  - `firstDeliveries`
+  - `duplicatesDetected`
+  - `lockLostRedeliveries`
+  - `completed`
+  - plus `runId` and `correlationId`
 
 The script also uses ANSI colors for readability in terminal output.
 
@@ -143,7 +151,6 @@ You should see logs for:
 - Completion and abandonment transitions
 - Dead-letter action with reason
 - DLQ count and item details
-- Duplicate simulation toggling and duplicate delivery
 - Run-isolation gate logs (`First gate BLOCKED/PASS ...`, blocked messages are not handled)
 - Predicate resolver behavior (`if predicate(message) true -> resolve + settle (complete)`)
 - Timeout with context (`Timeout while resolving predicate ... context={...}`)
@@ -151,10 +158,17 @@ You should see logs for:
 - Deadline hit log from stopwatch (`hit deadline after ... and returned 0 message(s)`)
 - Poll deadline assertion line (`Poll-until-deadline check: PASS ...`)
 - Diagnostics summary (`seenCount`, `lastMessage`, `eventualSeen(...)`)
+- Demo 4 summary block (`---- DEMO 4 SUMMARY ----` and `SUMMARY: deliveries=...`)
 
 ## How to run
 
 From project root, run:
+
+`npm run demo-1`
+
+`npm run demo-2`
+
+`npm run demo-3`
 
 `npm run demo`
 
