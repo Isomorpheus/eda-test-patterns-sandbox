@@ -2,7 +2,7 @@
 
 This document explains the sandbox demo in [src/demo.ts](../src/demo.ts) and the simulator in [src/inMemoryBus.ts](../src/inMemoryBus.ts).
 
-It also documents the duplicate/idempotency demo in [src/demo-4-duplicates-idempotency.ts](../src/demo-4-duplicates-idempotency.ts) and the parallel-runs isolation demo in [src/demo-5-parallel-runs-isolation.ts](../src/demo-5-parallel-runs-isolation.ts).
+It also documents the duplicate/idempotency demo in [src/demo-4-duplicates-idempotency.ts](../src/demo-4-duplicates-idempotency.ts), the parallel-runs isolation demo in [src/demo-5-parallel-runs-isolation.ts](../src/demo-5-parallel-runs-isolation.ts), and the mini-flow ordering demo in [src/demo-6-mini-flow-ordering.ts](../src/demo-6-mini-flow-ordering.ts).
 
 Related docs:
 
@@ -104,6 +104,28 @@ Top-level outcome handling:
   - cross-talk detection error => `EXPECTED FAILURE: cross-talk successfully detected` and clean exit
   - no detection => `ERROR: cross-talk simulation did NOT trigger detection` and non-zero exit
 
+### Block 6
+
+In [src/demo-6-mini-flow-ordering.ts](../src/demo-6-mini-flow-ordering.ts):
+
+- simulates a small STP-like flow for one `runId` across 3 correlation streams (`A-1`, `A-2`, `A-3`)
+- each correlation publishes exactly 3 ordered subjects:
+  - `FlowStarted`
+  - `FlowProcessed`
+  - `FlowCompleted`
+- send timing is interleaved globally with small random delays
+- receive path uses `waitForMessage(...)` with run-id filtering
+- collection map tracks per-correlation sequence and message IDs:
+  - `eventsByCorr: { subjectsSeen: string[], messageIds: string[] }`
+- duplicate-safe handling logs `FIRST|DUPLICATE` and always settles with `complete`
+- strict order assertion per correlation with explicit failure banner showing:
+  - `runId`
+  - `correlationId`
+  - expected order
+  - actual order
+- final summary prints each correlation order and PASS line:
+  - `PASS: ordering verified per correlationId`
+
 ## Diagnostics
 
 Diagnostics in [src/demo.ts](../src/demo.ts) include:
@@ -201,6 +223,9 @@ You should see logs for:
 - Demo 5 cross-talk error banner (`🚨 CROSS-TALK DETECTED 🚨`)
 - Demo 5 final PASS banner (`✅ PARALLEL RUN ISOLATION VERIFIED`)
 - Demo 5 expected-failure line in simulation mode (`EXPECTED FAILURE: cross-talk successfully detected`)
+- Demo 6 receive log format (`RUN A | runId=... | corr=... | msg=... | subject=... | FIRST/DUPLICATE | complete`)
+- Demo 6 summary block (`---- DEMO 6 SUMMARY ----`)
+- Demo 6 PASS line (`PASS: ordering verified per correlationId`)
 
 ## How to run
 
@@ -225,6 +250,10 @@ For Demo 5 only, run:
 For Demo 5 cross-talk simulation, run:
 
 `npm run demo-5 -- --crosstalk`
+
+For Demo 6 mini-flow ordering, run:
+
+`npm run demo-6`
 
 The demo uses a static receive deadline of `2000ms` for each receive call.
 

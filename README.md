@@ -20,6 +20,7 @@ npm run demo
 npm run demo-4
 npm run demo-5
 npm run demo-5 -- --crosstalk
+npm run demo-6
 ```
 
 3. Optional: compile TypeScript
