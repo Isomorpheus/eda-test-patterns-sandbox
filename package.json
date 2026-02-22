@@ -10,6 +10,7 @@
     "demo-4": "tsx src/demo-4-duplicates-idempotency.ts",
     "demo-5": "tsx src/demo-5-parallel-runs-isolation.ts",
     "demo-6": "tsx src/demo-6-mini-flow-ordering.ts",
+    "demo-6-negative": "tsx src/demo-6-mini-flow-ordering.ts --negative",
     "build": "tsc -p tsconfig.json",
     "test": "echo \"No tests configured\""
   },

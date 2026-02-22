@@ -5,6 +5,7 @@ import { waitForMessage } from "./waitForMessage";
 const QUEUE_NAME = "orders-mini-flow-ordering";
 const RUN_LABEL = "RUN A";
 const RUN_ID = randomUUID();
+const NEGATIVE_MODE = process.argv.includes("--negative");
 
 const CORRELATIONS = ["A-1", "A-2", "A-3"] as const;
 const EXPECTED_ORDER = ["FlowStarted", "FlowProcessed", "FlowCompleted"] as const;
@@ -102,6 +103,11 @@ function assertOrder(eventsByCorr: Map<string, CorrState>): void {
 async function runDemo(): Promise<void> {
   console.log(`\n${paint("=== Block 6: mini flow ordering per correlationId ===", ansi.bold, ansi.magenta)}`);
   console.log(`${paint("RUN A", ansi.bold, ansi.cyan)} | runId=${RUN_ID}`);
+  if (NEGATIVE_MODE) {
+    console.log(paint("Mode: --negative (expect ordering failure)", ansi.bold, ansi.yellow));
+  } else {
+    console.log(paint("Mode: normal", ansi.bold, ansi.green));
+  }
 
   const bus = new InMemoryBus({ lockDurationInMs: 15_000 });
   const receiver = bus.createReceiver(QUEUE_NAME, { receiveMode: "peekLock" });
@@ -115,8 +121,13 @@ async function runDemo(): Promise<void> {
 
   const sendTasks = CORRELATIONS.map((corr) =>
     (async () => {
-      for (let i = 0; i < EXPECTED_ORDER.length; i += 1) {
-        const subject = EXPECTED_ORDER[i];
+      const subjectOrder: readonly FlowSubject[] =
+        NEGATIVE_MODE && corr === "A-2"
+          ? (["FlowProcessed", "FlowStarted", "FlowCompleted"] as const)
+          : EXPECTED_ORDER;
+
+      for (let i = 0; i < subjectOrder.length; i += 1) {
+        const subject = subjectOrder[i];
         const delayMs = randomDelay(20, 120);
         await sleep(delayMs);
 
@@ -184,11 +195,32 @@ async function runDemo(): Promise<void> {
       .join(paint(" -> ", ansi.gray));
     console.log(`${paint("corr", ansi.bold)} ${paint(corr, ansi.cyan)}: ${order || "<none>"}`);
   }
+  console.log(paint("========================================", ansi.bold, ansi.green));
   console.log(paint("PASS: ordering verified per correlationId", ansi.bold, ansi.green));
+  console.log(paint("========================================", ansi.bold, ansi.green));
   console.log("");
 }
 
-runDemo().catch((error) => {
+async function main(): Promise<void> {
+  try {
+    await runDemo();
+
+    if (NEGATIVE_MODE) {
+      console.error(paint("ERROR: negative mode did NOT trigger ordering violation", ansi.bold, ansi.red));
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    if (NEGATIVE_MODE) {
+      console.log(paint("EXPECTED FAILURE: ordering violation detected", ansi.bold, ansi.yellow));
+      return;
+    }
+
+    console.error(`${paint("[Demo-06] Failed:", ansi.bold, ansi.red)}`, error);
+    process.exitCode = 1;
+  }
+}
+
+main().catch((error) => {
   console.error(`${paint("[Demo-06] Failed:", ansi.bold, ansi.red)}`, error);
   process.exitCode = 1;
 });

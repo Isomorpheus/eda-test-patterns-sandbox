@@ -126,6 +126,20 @@ In [src/demo-6-mini-flow-ordering.ts](../src/demo-6-mini-flow-ordering.ts):
 - final summary prints each correlation order and PASS line:
   - `PASS: ordering verified per correlationId`
 
+Block 6 now has two explicit modes:
+
+- normal mode (default): ordering must pass for all correlations
+- negative mode (`--negative`): one correlation (`A-2`) is intentionally sent out of order to trigger validation failure
+
+Top-level outcome handling:
+
+- default mode:
+  - success => PASS banner
+  - error => non-zero exit
+- `--negative` mode:
+  - ordering violation => `EXPECTED FAILURE: ordering violation detected` and clean exit
+  - no violation => `ERROR: negative mode did NOT trigger ordering violation` and non-zero exit
+
 ## Diagnostics
 
 Diagnostics in [src/demo.ts](../src/demo.ts) include:
@@ -226,6 +240,8 @@ You should see logs for:
 - Demo 6 receive log format (`RUN A | runId=... | corr=... | msg=... | subject=... | FIRST/DUPLICATE | complete`)
 - Demo 6 summary block (`---- DEMO 6 SUMMARY ----`)
 - Demo 6 PASS line (`PASS: ordering verified per correlationId`)
+- Demo 6 mode line (`Mode: normal` or `Mode: --negative (expect ordering failure)`)
+- Demo 6 expected-failure line in negative mode (`EXPECTED FAILURE: ordering violation detected`)
 
 ## How to run
 
@@ -254,6 +270,14 @@ For Demo 5 cross-talk simulation, run:
 For Demo 6 mini-flow ordering, run:
 
 `npm run demo-6`
+
+For Demo 6 negative ordering scenario, run:
+
+`npm run demo-6 -- --negative`
+
+or
+
+`npm run demo-6-negative`
 
 The demo uses a static receive deadline of `2000ms` for each receive call.
 
