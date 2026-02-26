@@ -133,10 +133,4 @@ Deliverables (MVP)
 	•	delta.json schema + voorbeeldbestand
 	•	Vue/Nuxt viewer (1 pagina)
 	•	CI voorbeeldstap (optioneel)
-	•	README + referentietests
-
-⸻
-
-Als je wilt, kan ik dit ook meteen omzetten naar:
-	•	Jira Story + subtasks (Node core / CLI / viewer / CI / docs)
-	•	of een refinement agenda met timeboxes en beslispunten (zodat je meeting strak blijft).
+	•	README + referentietest
