@@ -1,5 +1,5 @@
-Hier is de volledige, geïntegreerde en MT-proof versie.
-Strak. Resultaatgericht. Besluitondersteunend. Inclusief fasering en interne sprintbandbreedte.
+Hier is de volledige, definitieve MT-versie inclusief de strategische toevoeging en aangescherpte sprintinschatting.
+Compact, resultaatgericht en bestuurlijk leesbaar.
 
 ---
 
@@ -31,7 +31,7 @@ Fase 1 betreft géén structurele uitrol of generieke implementatie.
 De huidige keten is event-driven ingericht, waarbij Service Bus een centrale rol vervult in de communicatie tussen services.
 
 Ketenrisico’s ontstaan primair op eventniveau (propagatie, delivery, timing, correlatie).
-Voor het Fase-1 doel ligt validatie op messaging-niveau daarom logisch in lijn met de architectuur.
+Validatie van ketengedrag ligt daarom logisch op messaging-niveau in lijn met de architectuur.
 
 ---
 
@@ -94,10 +94,10 @@ Opschaling vertaalt validatie naar meetbare operationele efficiëntie.
 
 ### Fase 1 – Interne uitvoering (1 STP-flow)
 
-**Bandbreedte:**
+**Bandbreedte bij inzet van 1 FTE:**
 
-* sprint (2 weken) bij volledige focus
-* sprint bij gedeeltelijke beschikbaarheid
+* 👉 1 – 1,5 sprint (2 weken per sprint)
+* Bij 50% beschikbaarheid: 1,5 – 2 sprints kalenderdoorlooptijd
 
 ### Scope omvat:
 
@@ -132,6 +132,19 @@ Fase 1 is bedoeld als proportionele validatiestap ter ondersteuning van verdere 
 
 ---
 
+## 9. Strategische overwegingen
+
+De keuze tussen de scenario’s beïnvloedt naast initiële investering ook:
+
+* Mate van interne beheersbaarheid en overdraagbaarheid
+* Afhankelijkheid van externe expertise
+* Onderhoudsmodel op langere termijn
+* Snelheid van interne kennisopbouw
+
+De investeringsvolgorde bepaalt daarmee niet alleen de technische aanpak, maar ook de mate van structurele afhankelijkheid en flexibiliteit richting toekomstige uitbreiding.
+
+---
+
 ## Slot
 
 Dit document positioneert de scenario’s in relatie tot:
@@ -140,6 +153,12 @@ Dit document positioneert de scenario’s in relatie tot:
 * De event-driven architectuur
 * De beoogde gefaseerde opbouw
 * Operationele impact bij opschaling
+* Strategische beheersbaarheid op langere termijn
 
 Het dient als besluitinput voor verdere strategische keuzevorming.
 
+---
+
+Dit is bestuurlijk compleet, evenwichtig en resultaatgericht.
+
+Als je wilt, geef ik je nu een 20-seconden opening en een 20-seconden afsluiting om dit strak bij het MT te brengen.
