@@ -1,3 +1,6 @@
+
+
+
 import { BusMessage, InMemoryBus } from "./inMemoryBus";
 
 const RECEIVE_DEADLINE_MS = 2_000;
@@ -205,3 +208,65 @@ runDemo().catch((error) => {
   console.error(`${paint("[Demo] Failed:", ansi.bold, ansi.red)}`, error);
   process.exitCode = 1;
 });
+
+type DeepPartial<T> =
+  T extends Date ? T :
+  T extends Array<infer U> ? Array<DeepPartial<U>> :
+  T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } :
+  T;
+
+export function removeBlackListedProperties<T>(
+  obj: T,
+  keysToRemove: readonly string[],
+): DeepPartial<T> {
+  const blacklist = new Set(keysToRemove);
+  const cache = new WeakMap<object, unknown>();
+
+  return sanitizeBlackListedProperties(obj, blacklist, cache) as DeepPartial<T>;
+}
+
+function sanitizeBlackListedProperties(
+  obj: unknown,
+  blacklist: ReadonlySet<string>,
+  cache: WeakMap<object, unknown>,
+): unknown {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+
+  const cached = cache.get(obj);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  if (Array.isArray(obj)) {
+    const cleanedArray: unknown[] = [];
+    cache.set(obj, cleanedArray);
+
+    for (const item of obj) {
+      cleanedArray.push(
+        sanitizeBlackListedProperties(item, blacklist, cache),
+      );
+    }
+
+    return cleanedArray;
+  }
+
+  const proto = Object.getPrototypeOf(obj);
+  if (proto !== Object.prototype && proto !== null) {
+    return obj;
+  }
+
+  const cleanedObject: Record<string, unknown> = {};
+  cache.set(obj, cleanedObject);
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (blacklist.has(key)) {
+      continue;
+    }
+
+    cleanedObject[key] = sanitizeBlackListedProperties(value, blacklist, cache);
+  }
+
+  return cleanedObject;
+}
